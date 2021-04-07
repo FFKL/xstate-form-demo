@@ -1,4 +1,6 @@
-import { Machine, assign } from 'xstate';
+import { assign, Machine, StateNodeConfig, TransitionConfig } from 'xstate';
+
+const AsyncFunction = (async () => { }).constructor;
 
 type AsyncValidator = (value: string) => Promise<boolean>;
 
@@ -22,6 +24,109 @@ interface FormConfig {
   inputs: FormInputs;
 }
 
+interface AsyncTransition {
+  name: string;
+  validate: AsyncValidator;
+}
+
+type SyncTransition = TransitionConfig<any, any>;
+
+interface ValidatorsTransition {
+  async: AsyncTransition[];
+  sync: SyncTransition[];
+}
+
+function createValidators(inputName: string, validators: InputValidators): ValidatorsTransition {
+  const entires = Object.entries(validators);
+
+  return {
+    async: entires
+      .filter((e): e is [string, AsyncValidator] => e[1] instanceof AsyncFunction)
+      .map(([name, validate]) => ({ name, validate })),
+    sync: entires
+      .filter((e): e is [string, SyncValidator] => !(e[1] instanceof AsyncFunction))
+      .map(([name, validate]) => ({ target: `.invalid.${name}`, cond: ctx => validate(ctx[inputName]) }))
+  }
+}
+
+function createLeaveTransitions({ async, sync }: ValidatorsTransition): TransitionConfig<any, any>[] {
+  const result: TransitionConfig<any, any>[] = [];
+  if (sync.length > 0) result.push(...sync);
+  if (async.length > 0) result.push({ target: '.validating' });
+  if (result.length === 0) result.push({ target: '.valid' });
+
+  return result;
+}
+
+function createInput(name: string, input: FormInput): StateNodeConfig<any, any, any> {
+  const validators = createValidators(name, input.validators);
+  return {
+    initial: 'pristine',
+    states: {
+      pristine: {},
+      editing: {},
+      validating: {
+        // invoke: {
+        //   src: (ctx, event) => Promise.all(validators.async[0])
+        // },
+        // on: {
+        //   RESOLVE: 'valid',
+        //   REJECT: 'invalid.pending',
+        // }
+      },
+      valid: {},
+      invalid: {
+        initial: 'empty',
+        states: Object.fromEntries(Object.keys(input.validators).map(key => [key, {}]))
+      }
+    },
+    on: {
+      [`SET_${name.toUpperCase()}`]: {
+        target: '.editing',
+        actions: assign({ [name]: (ctx: any, event: any) => event[name] })
+      },
+      [`LEAVE_${name.toUpperCase()}`]: createLeaveTransitions(validators)
+    }
+  }
+}
+
+function createInputStates(inputs: FormInputs) {
+  return Object.fromEntries(Object.entries(inputs).map(([name, config]) => [name, createInput(name, config)]));
+}
+
+function formMachine<C extends object>(config: FormConfig) {
+  return Machine<C>({
+    id: 'formMachine',
+    initial: 'draft',
+    context: Object.fromEntries(Object.keys(config.inputs).map(key => [key, ''])) as C,
+    states: {
+      success: { type: 'final' },
+      error: { type: 'final' },
+      loading: {
+        on: {
+          LOAD_SUCCESS: 'success',
+          LOAD_ERROR: 'error',
+        },
+      },
+      draft: {
+        type: 'parallel',
+        states: createInputStates(config.inputs)
+      }
+    },
+    on: {
+      SUBMIT: {
+        target: 'loading',
+        in: {
+          draft: {
+            message: 'valid',
+            email: 'valid'
+          }
+        }
+      },
+    },
+  });
+}
+
 const formConfig: FormConfig = {
   inputs: {
     message: {
@@ -40,282 +145,4 @@ const formConfig: FormConfig = {
   }
 };
 
-// const inputMachine = Machine(
-//   {
-//     id: 'input',
-//     initial: 'pristine',
-//     context: {
-//       message: '',
-//     },
-//     states: {
-//       pristine: {},
-//       editing: {},
-//       validating: {
-//         on: {
-//           RESOLVE: 'valid',
-//           REJECT: 'invalid.pending',
-//         }
-//       },
-//       valid: {},
-//       invalid: {
-//         initial: 'empty',
-//         states: {
-//           empty: {},
-//           pending: {},
-//         }
-//       }
-//     },
-//     on: {
-//       SET_MESSAGE: {
-//         target: 'editing',
-//         actions: assign((_, { msg }) => ({ message: msg }))
-//       },
-//       LEAVE: [
-//         {
-//           target: 'invalid.empty',
-//           cond: ctx => ctx.message.length === 0
-//         },
-//         {
-//           target: 'validating'
-//         }
-//       ]
-//     }
-//   }
-// );
-
-const testFormMachine = Machine<{ message: string }>({
-  id: 'form',
-  initial: 'draft',
-  context: {
-    message: '',
-  },
-  states: {
-    loading: {
-      on: {
-        LOAD_SUCCESS: 'success',
-        LOAD_ERROR: 'error',
-      },
-    },
-    success: { type: 'final' },
-    error: { type: 'final' },
-    draft: {
-      type: 'parallel',
-      states: {
-        message: {
-          initial: 'pristine',
-          states: {
-            pristine: {},
-            editing: {},
-            validating: {
-              on: {
-                RESOLVE: 'valid',
-                REJECT: 'invalid.pending',
-              }
-            },
-            valid: {},
-            invalid: {
-              initial: 'empty',
-              states: {
-                empty: {},
-                pending: {},
-              }
-            }
-          },
-          on: {
-            SET_MESSAGE: {
-              target: '.editing',
-              actions: assign({
-                message: (ctx, event) => event['msg'],
-              })
-            },
-            LEAVE: [
-              {
-                target: '.invalid.empty',
-                cond: (ctx) => ctx.message.length === 0
-              },
-              {
-                target: '.validating'
-              }
-            ]
-          }
-        },
-        email: {
-          initial: 'pristine',
-          states: {
-            pristine: {},
-            editing: {},
-            validating: {
-              on: {
-                RESOLVE: 'valid',
-                REJECT: 'invalid.pending',
-              }
-            },
-            valid: {},
-            invalid: {
-              initial: 'empty',
-              states: {
-                empty: {},
-                pending: {},
-              }
-            }
-          },
-          on: {
-            SET_MESSAGE: {
-              target: '.editing',
-              actions: assign({
-                message: (ctx, event) => event['msg'],
-              })
-            },
-            LEAVE: [
-              {
-                target: '.invalid.empty',
-                cond: ctx => ctx.message.length === 0
-              },
-              {
-                target: '.validating'
-              }
-            ]
-          }
-        }
-      },
-      on: {
-        SUBMIT: {
-          target: 'loading',
-          in: {
-            draft: {
-              message: 'valid',
-              email: 'valid'
-            }
-          }
-        },
-      },
-    }
-  }
-});
-
-// const formMachine = Machine(
-//   {
-//     id: 'form',
-//     initial: 'draft',
-//     context: {
-//       message: '',
-//       email: '',
-//       _async_unregistered: undefined,
-//     },
-//     states: {
-//       draft: {
-//         type: 'parallel',
-//         states: {
-//           message: {
-//             initial: 'idle',
-//             states: {
-//               idle: {},
-//               editing: {},
-//               validating: {
-//                 src: () => Promise.resolve(true),
-//                 onDone: 'valid',
-//                 onError: 'invalid.unregistered',
-//               },
-//               valid: {},
-//               invalid: {
-//                 initial: 'empty',
-//                 states: {
-//                   empty: {},
-//                   unregistered: {},
-//                 },
-//               },
-//             },
-//             on: {
-//               SUBMIT: [
-//                 {
-//                   target: '.validity.invalid.empty',
-//                   cond: 'isMessageEmpty',
-//                 },
-//               ],
-//               SET_MESSAGE: {
-//                 target: '.validity.invalid',
-//                 actions: 'setMessage',
-//               },
-//             },
-//           },
-//           // email: {
-//           //   initial: 'valid',
-//           //   states: {
-//           //     valid: {},
-//           //     _async_unregistered: {
-//           //       src: async () => Promise.resolve(true),
-//           //       onDone: {
-//           //         target: 'valid',
-//           //         cond: assign((ctx, { data }) => ({
-//           //           _async_unregistered: data,
-//           //         })),
-//           //         actions: assign((ctx, { data }) => ({
-//           //           _async_unregistered: data,
-//           //         })),
-//           //       },
-//           //       onError: {
-//           //         target: 'invalid.unregistered',
-//           //       },
-//           //     },
-//           //     invalid: {
-//           //       initial: 'empty',
-//           //       states: {
-//           //         empty: {},
-//           //         incorrectEmail: {},
-//           //         unregistered: {},
-//           //       },
-//           //     },
-//           //   },
-//           //   on: {
-//           //     SUBMIT: [
-//           //       {
-//           //         target: '.invalid.empty',
-//           //         cond: 'isEmailEmpty',
-//           //       },
-//           //       {
-//           //         target: '.invalid.incorrectEmail',
-//           //         cond: 'isEmailIncorrect',
-//           //       },
-//           //       {
-//           //         target: '._async_unregistered',
-//           //         cond: 'isEmailUnregistered',
-//           //       },
-//           //     ],
-//           //     SET_EMAIL: {
-//           //       target: '.valid',
-//           //       actions: 'setEmail',
-//           //     },
-//           //   },
-//           // },
-//         },
-//         on: {
-//           SUBMIT: {
-//             target: 'loading',
-//             guards: ['#form.draft.message.validity.valid'],
-//           },
-//         },
-//       },
-//       loading: {
-//         on: {
-//           LOAD_SUCCESS: 'success',
-//           LOAD_ERROR: 'error',
-//         },
-//       },
-//       success: { type: 'final' },
-//       error: { type: 'final' },
-//     },
-//   },
-//   {
-//     actions: {
-//       setMessage: assign((ctx, { message }) => ({ message })),
-//       setEmail: assign((ctx, { email }) => ({ email })),
-//     },
-//     guards: {
-//       isMessageEmpty: (ctx) => ctx.message.length === 0,
-//       isEmailEmpty: (ctx) => ctx.email.length === 0,
-//       isEmailIncorrect: (ctx) => !ctx.email.includes('@'),
-//       isEmailUnregistered: (ctx) => ctx.unregistered !== true,
-//     },
-//   }
-// );
-console.log('end');
+const generatedForm = formMachine(formConfig);
