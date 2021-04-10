@@ -104,7 +104,7 @@ function createInputStates(inputs: FormInputs) {
   return Object.fromEntries(Object.entries(inputs).map(([name, config]) => [name, createInput(name, config)]));
 }
 
-function formMachine<C extends object>(config: FormConfig) {
+export function formMachine<C extends object>(config: FormConfig) {
   return Machine<C>({
     id: 'formMachine',
     initial: 'draft',

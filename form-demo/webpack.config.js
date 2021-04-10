@@ -26,6 +26,11 @@ const config = {
     new CleanWebpackPlugin(),
   ],
   devtool: 'inline-source-map',
+  resolve: {
+    alias: {
+      'xstate-form': path.resolve(__dirname, '../lib/dist/index.js'),
+    },
+  },
   devServer: {
     contentBase: path.join(__dirname, 'dist'),
     port: 9090,
