@@ -1,7 +1,7 @@
-import { assign, Machine, StateNodeConfig, TransitionConfig } from 'xstate';
+import { assign, Machine, StateNodeConfig, TransitionConfig, interpret } from 'xstate';
 
+// TODO: fix async function incorrect transpilation
 const AsyncFunction = (async () => { }).constructor;
-
 type AsyncValidator = (value: string) => Promise<boolean>;
 
 type SyncValidator = (value: string) => boolean;
@@ -54,12 +54,14 @@ function createLeaveTransitions({ async, sync }: ValidatorsTransition): Transiti
   if (sync.length > 0) result.push(...sync);
   if (async.length > 0) result.push({ target: '.validating' });
   if (async.length === 0) result.push({ target: '.valid' });
+  console.log(result);
 
   return result;
 }
 
 function createInput(name: string, input: FormInput): StateNodeConfig<any, any, any> {
   const validators = createValidators(name, input.validators);
+  console.log(validators);
   return {
     initial: 'pristine',
     states: {
@@ -70,7 +72,7 @@ function createInput(name: string, input: FormInput): StateNodeConfig<any, any, 
           src: (ctx, event) => Promise.all(validators.async),
           onDone: [
             {
-              target: 'asyncError',
+              target: 'valid',
               // cond: (ctx, { data }) => data.every()
             },
             {
@@ -78,10 +80,6 @@ function createInput(name: string, input: FormInput): StateNodeConfig<any, any, 
             }
           ],
           onError: 'valid'
-        },
-        on: {
-          RESOLVE: 'valid',
-          REJECT: 'invalid.pending',
         }
       },
       valid: {},
@@ -138,6 +136,10 @@ export function formMachine<C extends object>(config: FormConfig) {
       },
     },
   });
+}
+
+export function formService(config: FormConfig) {
+  return interpret(formMachine(config));
 }
 
 const formConfig: FormConfig = {

@@ -19,10 +19,7 @@ const config = {
     ],
   },
   plugins: [
-    new HtmlWebpackPlugin({
-      title: 'XState Form Demo',
-      template: 'src/index.html',
-    }),
+    new HtmlWebpackPlugin({ template: 'src/index.html' }),
     new CleanWebpackPlugin(),
   ],
   devtool: 'inline-source-map',
