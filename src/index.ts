@@ -53,7 +53,7 @@ function createLeaveTransitions({ async, sync }: ValidatorsTransition): Transiti
   const result: TransitionConfig<any, any>[] = [];
   if (sync.length > 0) result.push(...sync);
   if (async.length > 0) result.push({ target: '.validating' });
-  if (result.length === 0) result.push({ target: '.valid' });
+  if (async.length === 0) result.push({ target: '.valid' });
 
   return result;
 }
@@ -66,13 +66,23 @@ function createInput(name: string, input: FormInput): StateNodeConfig<any, any, 
       pristine: {},
       editing: {},
       validating: {
-        // invoke: {
-        //   src: (ctx, event) => Promise.all(validators.async[0])
-        // },
-        // on: {
-        //   RESOLVE: 'valid',
-        //   REJECT: 'invalid.pending',
-        // }
+        invoke: {
+          src: (ctx, event) => Promise.all(validators.async),
+          onDone: [
+            {
+              target: 'asyncError',
+              // cond: (ctx, { data }) => data.every()
+            },
+            {
+              target: 'valid'
+            }
+          ],
+          onError: 'valid'
+        },
+        on: {
+          RESOLVE: 'valid',
+          REJECT: 'invalid.pending',
+        }
       },
       valid: {},
       invalid: {
@@ -98,7 +108,10 @@ function formMachine<C extends object>(config: FormConfig) {
   return Machine<C>({
     id: 'formMachine',
     initial: 'draft',
-    context: Object.fromEntries(Object.keys(config.inputs).map(key => [key, ''])) as C,
+    context: {
+      ...Object.fromEntries(Object.keys(config.inputs).map(key => [key, ''])) as C,
+      asyncValidationResult: []
+    },
     states: {
       success: { type: 'final' },
       error: { type: 'final' },
