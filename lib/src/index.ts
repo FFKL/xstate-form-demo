@@ -74,7 +74,7 @@ function createAsyncLeaveTransitions(async: AsyncTransition[]): TransitionConfig
           throw new Error('Result without name!');
         }
 
-        return !foundResult.result;
+        return foundResult.result;
       }
     }
   })

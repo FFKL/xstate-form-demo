@@ -10,7 +10,7 @@ const form = formService({
       validators: {
         empty: (val) => val.length === 0,
         incorrectEmail: (val) => !val.includes('@'),
-        unregistered: async (val) => Promise.resolve(true),
+        unregistered: async (val) => Promise.resolve(false),
       },
     },
     password: {
