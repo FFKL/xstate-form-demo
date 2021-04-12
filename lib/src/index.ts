@@ -126,10 +126,7 @@ export function formMachine<C extends object>(config: FormConfig) {
       SUBMIT: {
         target: 'loading',
         in: {
-          draft: {
-            message: 'valid',
-            email: 'valid'
-          }
+          draft: Object.fromEntries(Object.keys(config.inputs).map(key => [key, 'valid']))
         }
       },
     },
