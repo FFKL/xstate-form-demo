@@ -36,6 +36,11 @@ interface ValidatorsTransition {
   sync: SyncTransition[];
 }
 
+interface AsyncTransitionResult {
+  name: string;
+  result: boolean;
+}
+
 function createValidators(inputName: string, validators: InputValidators): ValidatorsTransition {
   const entires = Object.entries(validators);
 
@@ -58,6 +63,30 @@ function createLeaveTransitions({ async, sync }: ValidatorsTransition): Transiti
   return result;
 }
 
+function createAsyncLeaveTransitions(async: AsyncTransition[]): TransitionConfig<any, { type: string, data: AsyncTransitionResult[] }>[] {
+  return async.map(({ name }) => {
+    return {
+      target: `invalid.${name}`,
+      cond: (ctx, { data }) => {
+        const foundResult = data.find(r => r.name === name);
+
+        if (foundResult === undefined) {
+          throw new Error('Result without name!');
+        }
+
+        return !foundResult.result;
+      }
+    }
+  })
+}
+
+function prepareAsyncValidators(transitions: AsyncTransition[], value: string): Promise<AsyncTransitionResult>[] {
+  return transitions.map(
+    ({ name, validate }) => validate(value)
+      .then(result => ({ name, result }))
+  )
+}
+
 function createInput(name: string, input: FormInput): StateNodeConfig<any, any, any> {
   const validators = createValidators(name, input.validators);
   return {
@@ -67,15 +96,10 @@ function createInput(name: string, input: FormInput): StateNodeConfig<any, any, 
       editing: {},
       validating: {
         invoke: {
-          src: (ctx, event) => Promise.all(validators.async),
+          src: (ctx, event) => Promise.all(prepareAsyncValidators(validators.async, ctx[name])),
           onDone: [
-            {
-              target: 'valid',
-              // cond: (ctx, { data }) => data.every()
-            },
-            {
-              target: 'valid'
-            }
+            ...createAsyncLeaveTransitions(validators.async),
+            { target: 'valid' }
           ],
           onError: 'valid'
         }
