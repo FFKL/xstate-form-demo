@@ -3,6 +3,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 
 import { formService } from 'xstate-form';
+import api from './fake-api';
 
 const form = formService({
   inputs: {
@@ -10,7 +11,8 @@ const form = formService({
       validators: {
         empty: (val) => val.length === 0,
         incorrectEmail: (val) => !val.includes('@'),
-        unregistered: async (val) => Promise.resolve(false),
+        used: async (val) => api.isEmailUsed(val),
+        bannedDomain: async (val) => api.isEmailDomainBanned(val)
       },
     },
     password: {
@@ -71,6 +73,7 @@ password$.addEventListener('blur', ({ target }) => {
 
 submitButton$.addEventListener('click', ({ target }) => {
   form.send('SUBMIT');
+  api.register(form.machine.context).then(() => form.send('LOAD_SUCCESS'))
 })
 
 form.start();
