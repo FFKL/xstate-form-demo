@@ -1,10 +1,8 @@
-import { assign, Machine, StateNodeConfig, TransitionConfig, interpret, StatesConfig, InvokeConfig } from 'xstate';
+import { assign, Machine, StateNodeConfig, TransitionConfig, interpret, InvokeConfig } from 'xstate';
 import type {
-  AsyncTransition,
   ControlValidators,
   ValidatorsTransition,
   AsyncValidator,
-  SyncValidator,
   AsyncTransitionResult,
   FormControl,
   FormConfig,

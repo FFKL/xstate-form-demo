@@ -25,7 +25,7 @@ const config = {
   devtool: 'inline-source-map',
   resolve: {
     alias: {
-      'xstate-form': path.resolve(__dirname, '../lib/dist/index.js'),
+      'xstate-form': path.resolve(__dirname, '../lib/dist/'),
     },
   },
   devServer: {

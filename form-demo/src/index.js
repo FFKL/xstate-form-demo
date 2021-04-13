@@ -3,6 +3,8 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 
 import { formService } from 'xstate-form';
+import { email, required, min } from 'xstate-form/built-in-validators';
+
 import api from './fake-api';
 
 const form = formService({
@@ -11,8 +13,8 @@ const form = formService({
       value: '',
       validators: {
         sync: [
-          { name: 'empty', message: 'Empty value', validate: val => val.length > 0 },
-          { name: 'incorrectEmail', message: 'Is not an email', validate: val => val.includes('@') }
+          { name: 'empty', message: 'Empty value', validate: required() },
+          { name: 'incorrectEmail', message: 'Is not an email', validate: email() }
         ],
         async: [
           { name: 'used', validate: val => api.checkEmailUsage(val) },
@@ -24,8 +26,8 @@ const form = formService({
       value: '',
       validators: {
         sync: [
-          { name: 'empty', message: 'Empty value', validate: val => val.length > 0 },
-          { name: 'minLength', message: 'Length < 4', validate: val => val.length >= 4 }
+          { name: 'empty', message: 'Empty value', validate: required() },
+          { name: 'minLength', message: 'Length < 4', validate: min(4) }
         ]
       },
     },

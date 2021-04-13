@@ -37,15 +37,12 @@ export interface FormConfig {
   controls: FormControls;
 }
 
-export interface AsyncTransition {
-  name: string;
-  validate: AsyncValidator;
-}
+export type AsyncTransition =  AsyncValidator;
 
 export type SyncTransition = TransitionConfig<any, any>;
 
 export interface ValidatorsTransition {
-  async: AsyncValidator[];
+  async: AsyncTransition[];
   sync: SyncTransition[];
 }
 
