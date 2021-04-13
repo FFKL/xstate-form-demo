@@ -3,11 +3,11 @@ const usedEmails = ['used1@example.com', 'used2@example.com'];
 const validDomain = 'example.com';
 
 export default {
-  async isEmailUsed(email) {
-    return timeout(200).then(() => usedEmails.includes(email));
+  async checkEmailUsage(email) {
+    return timeout(200).then(() => ({ valid: !usedEmails.includes(email), message: 'Email already used' }));
   },
-  async isEmailDomainBanned(email) {
-    return timeout(200).then(() => !email.includes(validDomain));
+  async checkDomainBanStatus(email) {
+    return timeout(200).then(() => ({ valid: email.includes(validDomain), message: 'Domain banned' }));
   },
   async register(credentials) {
     return timeout(200).then(() => { success: true });

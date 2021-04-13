@@ -1,136 +1,134 @@
-import { assign, Machine, StateNodeConfig, TransitionConfig, interpret } from 'xstate';
+import { assign, Machine, StateNodeConfig, TransitionConfig, interpret, StatesConfig, InvokeConfig } from 'xstate';
+import type {
+  AsyncTransition,
+  ControlValidators,
+  ValidatorsTransition,
+  AsyncValidator,
+  SyncValidator,
+  AsyncTransitionResult,
+  FormControl,
+  FormConfig,
+  FormControls
+} from './types';
 
-const AsyncFunction = (async () => { }).constructor;
-
-type AsyncValidator = (value: string) => Promise<boolean>;
-
-type SyncValidator = (value: string) => boolean;
-
-type InputValidator = AsyncValidator | SyncValidator;
-
-interface InputValidators {
-  [name: string]: InputValidator;
-}
-
-interface FormInput {
-  validators: InputValidators;
-}
-
-interface FormInputs {
-  [name: string]: FormInput
-}
-
-interface FormConfig {
-  inputs: FormInputs;
-}
-
-interface AsyncTransition {
-  name: string;
-  validate: AsyncValidator;
-}
-
-type SyncTransition = TransitionConfig<any, any>;
-
-interface ValidatorsTransition {
-  async: AsyncTransition[];
-  sync: SyncTransition[];
-}
-
-interface AsyncTransitionResult {
-  name: string;
-  result: boolean;
-}
-
-function createValidators(inputName: string, validators: InputValidators): ValidatorsTransition {
-  const entires = Object.entries(validators);
+function createValidators(controlName: string, validators?: ControlValidators): ValidatorsTransition {
+  if (validators === undefined) {
+    return { async: [], sync: [] }
+  }
+  const { async = [], sync = [] } = validators;
 
   return {
-    async: entires
-      .filter((e): e is [string, AsyncValidator] => e[1] instanceof AsyncFunction)
-      .map(([name, validate]) => ({ name, validate })),
-    sync: entires
-      .filter((e): e is [string, SyncValidator] => !(e[1] instanceof AsyncFunction))
-      .map(([name, validate]) => ({ target: `.invalid.${name}`, cond: ctx => validate(ctx[inputName]) }))
+    async,
+    sync: sync.map(({ name, message, validate }) => ({
+      target: `.invalid.${name}`,
+      cond: ctx => !validate(ctx[controlName]),
+      actions: assign({ __errorMessages: ctx => ({ ...ctx.__errorMessages, [controlName]: message }) })
+    }))
   }
 }
 
-function createLeaveTransitions({ async, sync }: ValidatorsTransition): TransitionConfig<any, any>[] {
+function createLeaveTransitions(controlName: string, { async, sync }: ValidatorsTransition): TransitionConfig<any, any>[] {
   const result: TransitionConfig<any, any>[] = [];
   if (sync.length > 0) result.push(...sync);
   if (async.length > 0) result.push({ target: '.validating' });
-  if (async.length === 0) result.push({ target: '.valid' });
+  if (async.length === 0) result.push({ target: '.valid', actions: assign({ __errorMessages: ctx => ({ ...ctx.__errorMessages, [controlName]: '' }) }) });
 
   return result;
 }
 
-function createAsyncLeaveTransitions(async: AsyncTransition[]): TransitionConfig<any, { type: string, data: AsyncTransitionResult[] }>[] {
-  return async.map(({ name }) => {
-    return {
-      target: `invalid.${name}`,
-      cond: (ctx, { data }) => {
-        const foundResult = data.find(r => r.name === name);
+function createAsyncLeaveTransitions(controlName: string, async: AsyncValidator[]): TransitionConfig<any, { type: string, data: AsyncTransitionResult[] }>[] {
+  return async.map(({ name }) => ({
+    target: `invalid.${name}`,
+    cond: (ctx, { data }) => {
+      const foundResult = data.find(r => r.name === name);
+      if (foundResult === undefined) {
+        throw new Error('Result without name!');
+      }
 
+      return !foundResult.result.valid;
+    },
+    actions: assign({
+      __errorMessages: (ctx, { data }) => {
+        const foundResult = data.find(r => r.name === name);
         if (foundResult === undefined) {
           throw new Error('Result without name!');
         }
 
-        return foundResult.result;
+        return { ...ctx.__errorMessages, [controlName]: foundResult.result.message }
       }
-    }
-  })
+    })
+  }))
 }
 
-function prepareAsyncValidators(transitions: AsyncTransition[], value: string): Promise<AsyncTransitionResult>[] {
+function prepareAsyncValidators(transitions: AsyncValidator[], value: string): Promise<AsyncTransitionResult>[] {
   return transitions.map(
-    ({ name, validate }) => validate(value)
-      .then(result => ({ name, result }))
+    ({ name, validate }) => validate(value).then(result => ({ name, result }))
   )
 }
 
-function createInput(name: string, input: FormInput): StateNodeConfig<any, any, any> {
-  const validators = createValidators(name, input.validators);
+function createValidatingService(controlName: string, validators: AsyncValidator[] = []): { invoke?: InvokeConfig<any, any> } {
+  if (validators.length === 0) return {};
+
+  return {
+    invoke: {
+      src: (ctx, event) => Promise.all(prepareAsyncValidators(validators, ctx[controlName])),
+      onDone: [
+        ...createAsyncLeaveTransitions(controlName, validators),
+        { target: 'valid', actions: assign({ __errorMessages: ctx => ({ ...ctx.__errorMessages, [controlName]: '' }) }) }
+      ],
+      onError: 'valid'
+    }
+  }
+}
+
+function createInvalidStatesConfig(validators?: ControlValidators): StateNodeConfig<any, any, any> {
+  if (validators === undefined) return {};
+  if (validators.async === undefined && validators.sync === undefined) return {};
+  const { async = [], sync = [] } = validators;
+
+  const initial = [...sync, ...async].shift()?.name;
+  if (initial === undefined) {
+    throw new Error('Name of initial state does not exist. Please check validators lists.');
+  }
+
+  return {
+    initial,
+    states: Object.fromEntries([...sync, ...async].map(({ name }) => [name, {}]))
+  }
+}
+
+function createControl(name: string, control: FormControl): StateNodeConfig<any, any, any> {
+  const validators = createValidators(name, control.validators);
   return {
     initial: 'pristine',
     states: {
       pristine: {},
       editing: {},
-      validating: {
-        invoke: {
-          src: (ctx, event) => Promise.all(prepareAsyncValidators(validators.async, ctx[name])),
-          onDone: [
-            ...createAsyncLeaveTransitions(validators.async),
-            { target: 'valid' }
-          ],
-          onError: 'valid'
-        }
-      },
+      validating: createValidatingService(name, validators.async),
       valid: {},
-      invalid: {
-        initial: 'empty',
-        states: Object.fromEntries(Object.keys(input.validators).map(key => [key, {}]))
-      }
+      invalid: createInvalidStatesConfig(control.validators)
     },
     on: {
       [`SET_${name.toUpperCase()}`]: {
         target: '.editing',
         actions: assign({ [name]: (ctx: any, event: any) => event[name] })
       },
-      [`LEAVE_${name.toUpperCase()}`]: createLeaveTransitions(validators)
+      [`LEAVE_${name.toUpperCase()}`]: createLeaveTransitions(name, validators)
     }
   }
 }
 
-function createInputStates(inputs: FormInputs) {
-  return Object.fromEntries(Object.entries(inputs).map(([name, config]) => [name, createInput(name, config)]));
+function createControls(controls: FormControls) {
+  return Object.fromEntries(Object.entries(controls).map(([name, control]) => [name, createControl(name, control)]));
 }
 
 export function formMachine<C extends object>(config: FormConfig) {
-  return Machine<C>({
+  return Machine<C & { __errorMessages: Record<keyof C, string> }>({
     id: 'formMachine',
     initial: 'draft',
     context: {
-      ...Object.fromEntries(Object.keys(config.inputs).map(key => [key, ''])) as C,
-      asyncValidationResult: []
+      ...Object.fromEntries(Object.entries(config.controls).map(([name, control]) => [name, control.value])) as C,
+      __errorMessages: Object.fromEntries(Object.keys(config.controls).map(name => [name, ''])) as Record<keyof C, string>
     },
     states: {
       success: { type: 'final' },
@@ -143,14 +141,14 @@ export function formMachine<C extends object>(config: FormConfig) {
       },
       draft: {
         type: 'parallel',
-        states: createInputStates(config.inputs)
+        states: createControls(config.controls)
       }
     },
     on: {
       SUBMIT: {
         target: 'loading',
         in: {
-          draft: Object.fromEntries(Object.keys(config.inputs).map(key => [key, 'valid']))
+          draft: Object.fromEntries(Object.keys(config.controls).map(key => [key, 'valid']))
         }
       },
     },
@@ -160,23 +158,3 @@ export function formMachine<C extends object>(config: FormConfig) {
 export function formService(config: FormConfig) {
   return interpret(formMachine(config));
 }
-
-const formConfig: FormConfig = {
-  inputs: {
-    message: {
-      validators: {
-        empty: (val: string) => val.length === 0,
-        minLength: (val: string) => val.length < 4,
-      },
-    },
-    email: {
-      validators: {
-        empty: (val: string) => val.length === 0,
-        incorrectEmail: (val: string) => !val.includes('@'),
-        unregistered: async (val: string) => Promise.resolve(true),
-      },
-    },
-  }
-};
-
-const generatedForm = formMachine(formConfig);

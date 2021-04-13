@@ -6,19 +6,27 @@ import { formService } from 'xstate-form';
 import api from './fake-api';
 
 const form = formService({
-  inputs: {
+  controls: {
     email: {
+      value: '',
       validators: {
-        empty: (val) => val.length === 0,
-        incorrectEmail: (val) => !val.includes('@'),
-        used: async (val) => api.isEmailUsed(val),
-        bannedDomain: async (val) => api.isEmailDomainBanned(val)
+        sync: [
+          { name: 'empty', message: 'Empty value', validate: val => val.length > 0 },
+          { name: 'incorrectEmail', message: 'Is not an email', validate: val => val.includes('@') }
+        ],
+        async: [
+          { name: 'used', validate: val => api.checkEmailUsage(val) },
+          { name: 'bannedDomain', validate: val => api.checkDomainBanStatus(val) }
+        ]
       },
     },
     password: {
+      value: '',
       validators: {
-        empty: (val) => val.length === 0,
-        minLength: (val) => val.length < 4,
+        sync: [
+          { name: 'empty', message: 'Empty value', validate: val => val.length > 0 },
+          { name: 'minLength', message: 'Length < 4', validate: val => val.length >= 4 }
+        ]
       },
     },
   },
@@ -28,7 +36,7 @@ const password$ = document.querySelector('#inputPassword');
 const submitButton$ = document.querySelector('#submit');
 const formState$ = document.querySelector('#formState');
 
-function checkInput(input$, state) {
+function checkInput(input$, state, message) {
   if (typeof state === 'string' && state === 'valid') {
     input$.classList.add('is-valid');
     input$.classList.remove('is-invalid');
@@ -37,7 +45,7 @@ function checkInput(input$, state) {
   if (typeof state === 'object' && state.hasOwnProperty('invalid')) {
     input$.classList.add('is-invalid');
     input$.classList.remove('is-valid');
-    input$.parentElement.querySelector('.invalid-feedback').textContent = state.invalid;
+    input$.parentElement.querySelector('.invalid-feedback').textContent = message;
   }
 }
 
@@ -49,11 +57,11 @@ function checkButton(button$, state) {
 form.onTransition(({ context, value }) => {
   if (typeof value === 'object' && value.hasOwnProperty('draft')) {
     const { draft, draft: { email, password } } = value;
-    checkInput(email$, email);
-    checkInput(password$, password);
+    checkInput(email$, email, context.__errorMessages.email);
+    checkInput(password$, password, context.__errorMessages.password);
     checkButton(submitButton$, draft);
   }
-  formState$.textContent = JSON.stringify(value, undefined, 2);
+  formState$.textContent = JSON.stringify(value, undefined, 2) + JSON.stringify(context, undefined, 2);
 });
 
 
