@@ -1,4 +1,5 @@
-import { assign, Machine, StateNodeConfig, TransitionConfig, interpret, InvokeConfig } from 'xstate';
+import { assign, Machine, StateNodeConfig, TransitionConfig, interpret, InvokeConfig, StateMachine } from 'xstate';
+import { mapValues } from 'xstate/lib/utils';
 import type {
   ControlValidators,
   ValidatorsTransition,
@@ -117,16 +118,16 @@ function createControl(name: string, control: FormControl): StateNodeConfig<any,
 }
 
 function createControls(controls: FormControls) {
-  return Object.fromEntries(Object.entries(controls).map(([name, control]) => [name, createControl(name, control)]));
+  return mapValues(controls, (control, name) => createControl(name as string, control))
 }
 
-export function formMachine<C extends object>(config: FormConfig) {
-  return Machine<C & { __errorMessages: Record<keyof C, string> }>({
+export function formMachine(config: FormConfig): StateMachine<any, any, any> {
+  return Machine({
     id: 'formMachine',
     initial: 'draft',
     context: {
-      ...Object.fromEntries(Object.entries(config.controls).map(([name, control]) => [name, control.value])) as C,
-      __errorMessages: Object.fromEntries(Object.keys(config.controls).map(name => [name, ''])) as Record<keyof C, string>
+      ...mapValues(config.controls, control => control.value),
+      __errorMessages: mapValues(config.controls, () => '')
     },
     states: {
       success: { type: 'final' },
@@ -146,7 +147,7 @@ export function formMachine<C extends object>(config: FormConfig) {
       SUBMIT: {
         target: 'loading',
         in: {
-          draft: Object.fromEntries(Object.keys(config.controls).map(key => [key, 'valid']))
+          draft: mapValues(config.controls, () => 'valid')
         }
       },
     },
