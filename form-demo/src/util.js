@@ -10,3 +10,11 @@ export function renderView(root$, name) {
 
   return clone;
 }
+
+export function getRootStateName(stateValue) {
+  if (typeof stateValue === 'string') {
+    return stateValue;
+  }
+
+  return Object.keys(stateValue).pop();
+}

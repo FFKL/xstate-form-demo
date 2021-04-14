@@ -1,16 +1,14 @@
-import { from, fromEvent, merge } from 'rxjs';
-
-import { renderView } from '../util';
+import { fromEvent } from 'rxjs';
 
 export class LoginErrorComponent {
   constructor(formMachine, root$) {
     this.formMachine = formMachine;
     this.root$ = root$;
     this.subscriptions = [];
+    this.name = 'login-error';
   }
 
   init() {
-    renderView(this.root$, 'login-error');
     const tryAgainButton$ = this.root$.querySelector('#try-again');
     const subscription = fromEvent(tryAgainButton$, 'click').subscribe(() => {
       this.formMachine.send('TRY_AGAIN');

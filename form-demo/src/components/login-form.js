@@ -1,6 +1,5 @@
 import { fromEvent, merge } from 'rxjs';
 
-import { renderView } from '../util';
 import api from '../fake-api';
 
 export class LoginFormComponent {
@@ -8,10 +7,10 @@ export class LoginFormComponent {
     this.formMachine = formMachine;
     this.root$ = root$;
     this.subscriptions = [];
+    this.name = 'login-form';
   }
 
   init() {
-    renderView(this.root$, 'login-form');
     const email$ = this.root$.querySelector('#email');
     const password$ = this.root$.querySelector('#password');
     const submitButton$ = this.root$.querySelector('#submit');

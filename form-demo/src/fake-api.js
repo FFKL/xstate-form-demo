@@ -10,7 +10,6 @@ export default {
     return timeout(200).then(() => ({ valid: email.includes(validDomain), message: 'Domain banned' }));
   },
   async register(credentials) {
-    console.log(credentials);
     return timeout(200).then(() => ({ success: credentials.email === 'success@example.com' }));
   }
 }
