@@ -19,12 +19,16 @@ function formMachine(config: FormConfig): StateMachine<any, any, any> {
     },
     states: {
       success: { type: 'final' },
-      error: { type: 'final' },
+      error: {
+        on: {
+          TRY_AGAIN: 'draft',
+        }
+      },
       loading: {
         on: {
           LOAD_SUCCESS: 'success',
           LOAD_ERROR: 'error',
-        },
+        }
       },
       draft: {
         type: 'parallel',
