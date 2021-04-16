@@ -1,4 +1,4 @@
-import { interpret, Machine, StateMachine } from 'xstate';
+import { interpret, Machine, StateMachine, assign} from 'xstate';
 import { mapValues } from 'xstate/lib/utils';
 
 import { FormControlBuilder } from './form-control-builder';
@@ -21,7 +21,13 @@ function formMachine(config: FormConfig): StateMachine<any, any, any> {
       success: { type: 'final' },
       error: {
         on: {
-          TRY_AGAIN: 'draft',
+          TRY_AGAIN: {
+            target: 'draft',
+            actions: assign(() => ({
+              ...mapValues(config.controls, (control) => control.value),
+              __errorMessages: mapValues(config.controls, () => ''),
+            }))
+          }
         }
       },
       loading: {
