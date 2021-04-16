@@ -14,8 +14,8 @@ const form = formService({
       value: '',
       validators: {
         sync: [
-          { name: 'empty', message: 'Empty value', validate: Validator.required() },
-          { name: 'incorrectEmail', message: 'Is not an email', validate: Validator.email() },
+          { name: 'empty', message: 'Email is required', validate: Validator.required() },
+          { name: 'incorrectEmail', message: 'Email must be a valid email address', validate: Validator.email() },
         ],
         async: [
           { name: 'used', validate: (val) => api.checkEmailUsage(val) },
@@ -27,8 +27,8 @@ const form = formService({
       value: '',
       validators: {
         sync: [
-          { name: 'empty', message: 'Empty value', validate: Validator.required() },
-          { name: 'minLength', message: 'Length < 4', validate: Validator.min(4) },
+          { name: 'empty', message: 'Password is required', validate: Validator.required() },
+          { name: 'minLength', message: 'Password must be at least 4 characters long', validate: Validator.min(4) },
         ],
       },
     },

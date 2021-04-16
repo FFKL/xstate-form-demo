@@ -52,7 +52,10 @@ export class FormControlBuilder {
             actions: assignErrorMessage(this.controlName, ''),
           },
         ],
-        onError: 'valid',
+        onError: {
+          target: 'valid',
+          actions: (ctx, { data }) => console.error(data)
+        },
       },
     };
   }
