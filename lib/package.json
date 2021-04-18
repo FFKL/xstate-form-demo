@@ -1,5 +1,5 @@
 {
-  "name": "xstate-form",
+  "name": "xstate-form-lib",
   "version": "1.0.0",
   "description": "",
   "main": "form-builder.js",

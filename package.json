@@ -1,0 +1,10 @@
+{
+  "name": "xstate-form",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npm run build-lib && npm run serve-demo",
+    "build-lib": "cd ./lib && npm run build",
+    "serve-demo": "cd ./form-demo && npm run serve"
+    
+  }
+}

@@ -54,7 +54,7 @@ export class LoginFormComponent {
         .then(({ success }) => this.formMachine.send(success ? 'LOAD_SUCCESS' : 'LOAD_ERROR'));
     })
 
-    this.subscriptions.push(formSubscription, inputsSubscription, formSubscription);
+    this.subscriptions.push(formSubscription, inputsSubscription, submitSubscription);
   }
 
   destroy() {
